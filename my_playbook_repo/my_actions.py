@@ -105,8 +105,14 @@ class CordonStatefulNodesParams(ActionParams):
 @action
 def cordon_stateful_nodes(event: ExecutionBaseEvent, params: CordonStatefulNodesParams):
     """
-    Cordon nodes where the label node.paytm.com/group contains the value stateful.
+    Cordon nodes where the label node.paytm.com/group contains the value stateful,
+    but only when the alert DiskUtilizationOverSeventyFivePercent is triggered.
     """
+    # Check if the alert name is DiskUtilizationOverSeventyFivePercent
+    if not any(alert.alert_name == "DiskUtilizationOverSeventyFivePercent" for alert in event.get_alerts()):
+        logging.info("Alert is not DiskUtilizationOverSeventyFivePercent, skipping cordon action.")
+        return
+
     try:
         config.load_incluster_config()
     except config.ConfigException:
@@ -130,6 +136,7 @@ def cordon_stateful_nodes(event: ExecutionBaseEvent, params: CordonStatefulNodes
                 try:
                     v1.patch_node(node.metadata.name, body)
                     cordoned_nodes.append(node.metadata.name)
+                    event.add_enrichment([MarkdownBlock(f"Node {node.metadata.name} cordoned")])
                 except Exception as e:
                     logging.error(f"Failed to cordon node {node.metadata.name}: {e}")
                     event.add_finding(
