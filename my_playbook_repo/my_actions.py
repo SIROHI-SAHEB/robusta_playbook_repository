@@ -114,6 +114,8 @@ def cordon_stateful_nodes(event: ExecutionBaseEvent, params: CordonStatefulNodes
         logging.error("Node name is missing in the parameters.")
         raise ActionException(ErrorCodes.ACTION_VALIDATION_ERROR, "Node name is missing in the parameters.")
 
+    logging.info(f"Node name to cordon: {node_name}")
+
     try:
         config.load_incluster_config()
     except config.ConfigException:
