@@ -99,7 +99,7 @@ class CordonStatefulNodesParams(ActionParams):
     :var node_name: name of the node to cordon
     :example node_name: some-node-name
     """
-    node_name: str
+    node_name: Optional[str] = "ip-172-21-7-117.ap-south-1.compute.internal"
 
 @action
 def cordon_stateful_nodes(event: ExecutionBaseEvent, params: CordonStatefulNodesParams):
