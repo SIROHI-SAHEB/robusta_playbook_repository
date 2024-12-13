@@ -114,7 +114,8 @@ def cordon_stateful_nodes(event: ExecutionBaseEvent, params: CordonStatefulNodes
         return
 
     # Check if the alert name is DiskUtilizationOverSeventyFivePercent
-    if not any(alert.labels.get("alertname") == "DiskUtilizationOverSeventyFivePercent" for alert in event.alerts):
+    alerts = event.get_alerts_data()  # Assuming get_alerts_data() returns the alerts data
+    if not any(alert["labels"].get("alertname") == "DiskUtilizationOverSeventyFivePercent" for alert in alerts):
         logging.info("Alert is not DiskUtilizationOverSeventyFivePercent, skipping cordon action.")
         return
 
