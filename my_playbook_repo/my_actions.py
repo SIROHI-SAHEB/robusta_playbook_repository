@@ -126,6 +126,7 @@ def cordon_stateful_nodes(event: ExecutionBaseEvent, params: CordonStatefulNodes
                 try:
                     v1.patch_node(node.metadata.name, body)
                     cordoned_nodes.append(node.metadata.name)
+                    event.add_enrichment([MarkdownBlock(f"Node {node.metadata.name} cordoned")])
                 except Exception as e:
                     logging.error(f"Failed to cordon node {node.metadata.name}: {e}")
                     event.add_finding(
