@@ -106,6 +106,8 @@ def cordon_stateful_nodes(event: ExecutionBaseEvent, params: CordonStatefulNodes
     """
     Cordon the node where the label node.paytm.com/group contains the value stateful.
     """
+    logging.info(f"Received parameters: {params}")
+
     node_name = params.node_name
 
     if not node_name:
