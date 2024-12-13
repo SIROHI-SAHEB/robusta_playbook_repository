@@ -96,34 +96,17 @@ def resize_persistent_volume(event: ExecutionBaseEvent, params: ResizePVCParams)
 
 class CordonStatefulNodesParams(ActionParams):
     """
-    :var label_selector: label selector to filter nodes
-    :example label_selector: node.paytm.com/group
+    :var node_name: name of the node to cordon
+    :example node_name: some-node-name
     """
-    label_selector: str = "node.paytm.com/group"
-
+    node_name: str
 
 @action
 def cordon_stateful_nodes(event: ExecutionBaseEvent, params: CordonStatefulNodesParams):
     """
-    Cordon nodes where the label node.paytm.com/group contains the value stateful,
-    but only for the node associated with the alert DiskUtilizationOverSeventyFivePercent.
+    Cordon the node where the label node.paytm.com/group contains the value stateful.
     """
-    # Ensure the event is a Prometheus alert
-    if not isinstance(event, PrometheusKubernetesAlert):
-        logging.info("Event is not a PrometheusKubernetesAlert, skipping cordon action.")
-        return
-
-    # Check if the alert name is DiskUtilizationOverSeventyFivePercent
-    alerts = event.get_alerts_data()  # Assuming get_alerts_data() returns the alerts data
-    if not any(alert["labels"].get("alertname") == "DiskUtilizationOverSeventyFivePercent" for alert in alerts):
-        logging.info("Alert is not DiskUtilizationOverSeventyFivePercent, skipping cordon action.")
-        return
-
-    # Get the node name from the alert
-    node_name = event.get_node_name()
-    if not node_name:
-        logging.info("No node name found in the alert, skipping cordon action.")
-        return
+    node_name = params.node_name
 
     try:
         config.load_incluster_config()
