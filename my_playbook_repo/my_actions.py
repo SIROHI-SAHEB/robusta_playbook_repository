@@ -107,7 +107,11 @@ def cordon_stateful_nodes(event: ExecutionBaseEvent, params: CordonStatefulNodes
     """
     Cordon nodes where the label node.paytm.com/group contains the value stateful.
     """
-    config.load_kube_config()
+    try:
+        config.load_incluster_config()
+    except config.ConfigException:
+        config.load_kube_config()
+
     v1 = client.CoreV1Api()
 
     # List all nodes
