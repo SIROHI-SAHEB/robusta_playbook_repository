@@ -109,7 +109,7 @@ def cordon_stateful_nodes(event: ExecutionBaseEvent, params: CordonStatefulNodes
     but only when the alert DiskUtilizationOverSeventyFivePercent is triggered.
     """
     # Check if the alert name is DiskUtilizationOverSeventyFivePercent
-    if not any(alert["labels"].get("alertname") == "DiskUtilizationOverSeventyFivePercent" for alert in event.get_prometheus_alerts()):
+    if not any(alert["labels"].get("alertname") == "DiskUtilizationOverSeventyFivePercent" for alert in event.get_alerts()):
         logging.info("Alert is not DiskUtilizationOverSeventyFivePercent, skipping cordon action.")
         return
 
