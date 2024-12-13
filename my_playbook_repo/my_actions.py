@@ -117,13 +117,32 @@ def cordon_stateful_nodes(event: ExecutionBaseEvent, params: CordonStatefulNodes
     for node in nodes:
         labels = node.metadata.labels
         if any("stateful" in value for value in labels.values()):
-            body = {
-                "spec": {
-                    "unschedulable": True
+            if not node.spec.unschedulable:
+                body = {
+                    "spec": {
+                        "unschedulable": True
+                    }
                 }
-            }
-            v1.patch_node(node.metadata.name, body)
-            cordoned_nodes.append(node.metadata.name)
+                try:
+                    v1.patch_node(node.metadata.name, body)
+                    cordoned_nodes.append(node.metadata.name)
+                except Exception as e:
+                    logging.error(f"Failed to cordon node {node.metadata.name}: {e}")
+                    event.add_finding(
+                        Finding(
+                            title=f"Error cordoning node {node.metadata.name}",
+                            aggregation_key="CordonStatefulNodesError",
+                            finding_type=FindingType.ISSUE,
+                            failure=True,
+                        )
+                    )
+                    event.add_enrichment(
+                        [
+                            MarkdownBlock(
+                                f"Failed to cordon node {node.metadata.name} due to {e}"
+                            )
+                        ]
+                    )
 
     if cordoned_nodes:
         logging.info(f"Cordoned nodes: {', '.join(cordoned_nodes)}")
