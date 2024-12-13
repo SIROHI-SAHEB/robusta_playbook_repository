@@ -105,8 +105,25 @@ class CordonStatefulNodesParams(ActionParams):
 @action
 def cordon_stateful_nodes(event: ExecutionBaseEvent, params: CordonStatefulNodesParams):
     """
-    Cordon nodes where the label node.paytm.com/group contains the value stateful.
+    Cordon nodes where the label node.paytm.com/group contains the value stateful,
+    but only for the node associated with the alert DiskUtilizationOverSeventyFivePercent.
     """
+    # Ensure the event is a Prometheus alert
+    if not isinstance(event, PrometheusKubernetesAlert):
+        logging.info("Event is not a PrometheusKubernetesAlert, skipping cordon action.")
+        return
+
+    # Check if the alert name is DiskUtilizationOverSeventyFivePercent
+    if not any(alert.labels.get("alertname") == "DiskUtilizationOverSeventyFivePercent" for alert in event.alerts):
+        logging.info("Alert is not DiskUtilizationOverSeventyFivePercent, skipping cordon action.")
+        return
+
+    # Get the node name from the alert
+    node_name = event.get_node_name()
+    if not node_name:
+        logging.info("No node name found in the alert, skipping cordon action.")
+        return
+
     try:
         config.load_incluster_config()
     except config.ConfigException:
@@ -114,52 +131,40 @@ def cordon_stateful_nodes(event: ExecutionBaseEvent, params: CordonStatefulNodes
 
     v1 = client.CoreV1Api()
 
-    # List all nodes
-    nodes = v1.list_node(label_selector=params.label_selector).items
+    # Get the node
+    try:
+        node = v1.read_node(name=node_name)
+    except client.exceptions.ApiException as e:
+        logging.error(f"Failed to read node {node_name}: {e}")
+        raise ActionException(ErrorCodes.ACTION_UNEXPECTED_ERROR, f"Failed to read node {node_name} {e}")
 
-    cordoned_nodes = []
-    for node in nodes:
-        labels = node.metadata.labels
-        if any("stateful" in value for value in labels.values()):
-            if node.spec.unschedulable:
-                event.add_enrichment([MarkdownBlock(f"Node {node.metadata.name} already cordoned")])
-                continue
-
+    # Check if the node has the required label and is not already cordoned
+    labels = node.metadata.labels
+    if any("stateful" in value for value in labels.values()):
+        if node.spec.unschedulable:
+            event.add_enrichment([MarkdownBlock(f"Node {node.metadata.name} already cordoned")])
+        else:
             try:
                 v1.patch_node(node.metadata.name, {"spec": {"unschedulable": True}})
-                cordoned_nodes.append(node.metadata.name)
                 event.add_enrichment([MarkdownBlock(f"Node {node.metadata.name} cordoned")])
+                logging.info(f"Node {node.metadata.name} cordoned")
             except Exception as e:
                 logging.error(f"Failed to cordon node {node.metadata.name}: {e}")
                 raise ActionException(ErrorCodes.ACTION_UNEXPECTED_ERROR, f"Failed to cordon node {node.metadata.name} {e}")
-
-    if cordoned_nodes:
-        logging.info(f"Cordoned nodes: {', '.join(cordoned_nodes)}")
-        event.add_finding(
-            Finding(
-                title="Cordoned Stateful Nodes",
-                aggregation_key="CordonStatefulNodes",
-                finding_type=FindingType.REPORT,
-                failure=False,
-            )
-        )
-        event.add_enrichment(
-            [
-                MarkdownBlock(f"Cordoned nodes: {', '.join(cordoned_nodes)}")
-            ]
-        )
     else:
-        logging.info("No stateful nodes found to cordon.")
-        event.add_finding(
-            Finding(
-                title="No Stateful Nodes Found",
-                aggregation_key="CordonStatefulNodes",
-                finding_type=FindingType.REPORT,
-                failure=False,
-            )
+        logging.info(f"Node {node.metadata.name} does not have the required label, skipping cordon action.")
+
+    # Add findings and enrichment
+    event.add_finding(
+        Finding(
+            title="Cordoned Stateful Node",
+            aggregation_key="CordonStatefulNodes",
+            finding_type=FindingType.REPORT,
+            failure=False,
         )
-        event.add_enrichment(
-            [
-                MarkdownBlock("No stateful nodes found to cordon.")
-            ]
-        )
+    )
+    event.add_enrichment(
+        [
+            MarkdownBlock(f"Node {node.metadata.name} cordoned")
+        ]
+    )
