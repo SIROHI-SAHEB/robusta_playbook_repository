@@ -92,3 +92,66 @@ def resize_persistent_volume(event: ExecutionBaseEvent, params: ResizePVCParams)
                 )
             ]
         )
+
+
+class CordonStatefulNodesParams(ActionParams):
+    """
+    :var label_selector: label selector to filter nodes
+    :example label_selector: node.paytm.com/group
+    """
+    label_selector: str = "node.paytm.com/group"
+
+
+@action
+def cordon_stateful_nodes(event: ExecutionBaseEvent, params: CordonStatefulNodesParams):
+    """
+    Cordon nodes where the label node.paytm.com/group contains the value stateful.
+    """
+    config.load_kube_config()
+    v1 = client.CoreV1Api()
+
+    # List all nodes
+    nodes = v1.list_node(label_selector=params.label_selector).items
+
+    cordoned_nodes = []
+    for node in nodes:
+        labels = node.metadata.labels
+        if any("stateful" in value for value in labels.values()):
+            body = {
+                "spec": {
+                    "unschedulable": True
+                }
+            }
+            v1.patch_node(node.metadata.name, body)
+            cordoned_nodes.append(node.metadata.name)
+
+    if cordoned_nodes:
+        logging.info(f"Cordoned nodes: {', '.join(cordoned_nodes)}")
+        event.add_finding(
+            Finding(
+                title="Cordoned Stateful Nodes",
+                aggregation_key="CordonStatefulNodes",
+                finding_type=FindingType.REPORT,
+                failure=False,
+            )
+        )
+        event.add_enrichment(
+            [
+                MarkdownBlock(f"Cordoned nodes: {', '.join(cordoned_nodes)}")
+            ]
+        )
+    else:
+        logging.info("No stateful nodes found to cordon.")
+        event.add_finding(
+            Finding(
+                title="No Stateful Nodes Found",
+                aggregation_key="CordonStatefulNodes",
+                finding_type=FindingType.REPORT,
+                failure=False,
+            )
+        )
+        event.add_enrichment(
+            [
+                MarkdownBlock("No stateful nodes found to cordon.")
+            ]
+        )
