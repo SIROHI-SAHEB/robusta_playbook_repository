@@ -105,14 +105,8 @@ class CordonStatefulNodesParams(ActionParams):
 @action
 def cordon_stateful_nodes(event: ExecutionBaseEvent, params: CordonStatefulNodesParams):
     """
-    Cordon nodes where the label node.paytm.com/group contains the value stateful,
-    but only when the alert DiskUtilizationOverSeventyFivePercent is triggered.
+    Cordon nodes where the label node.paytm.com/group contains the value stateful.
     """
-    # Check if the alert name is DiskUtilizationOverSeventyFivePercent
-    if not any(alert["labels"].get("alertname") == "DiskUtilizationOverSeventyFivePercent" for alert in event.get_alerts()):
-        logging.info("Alert is not DiskUtilizationOverSeventyFivePercent, skipping cordon action.")
-        return
-
     try:
         config.load_incluster_config()
     except config.ConfigException:
@@ -127,33 +121,17 @@ def cordon_stateful_nodes(event: ExecutionBaseEvent, params: CordonStatefulNodes
     for node in nodes:
         labels = node.metadata.labels
         if any("stateful" in value for value in labels.values()):
-            if not node.spec.unschedulable:
-                body = {
-                    "spec": {
-                        "unschedulable": True
-                    }
-                }
-                try:
-                    v1.patch_node(node.metadata.name, body)
-                    cordoned_nodes.append(node.metadata.name)
-                    event.add_enrichment([MarkdownBlock(f"Node {node.metadata.name} cordoned")])
-                except Exception as e:
-                    logging.error(f"Failed to cordon node {node.metadata.name}: {e}")
-                    event.add_finding(
-                        Finding(
-                            title=f"Error cordoning node {node.metadata.name}",
-                            aggregation_key="CordonStatefulNodesError",
-                            finding_type=FindingType.ISSUE,
-                            failure=True,
-                        )
-                    )
-                    event.add_enrichment(
-                        [
-                            MarkdownBlock(
-                                f"Failed to cordon node {node.metadata.name} due to {e}"
-                            )
-                        ]
-                    )
+            if node.spec.unschedulable:
+                event.add_enrichment([MarkdownBlock(f"Node {node.metadata.name} already cordoned")])
+                continue
+
+            try:
+                v1.patch_node(node.metadata.name, {"spec": {"unschedulable": True}})
+                cordoned_nodes.append(node.metadata.name)
+                event.add_enrichment([MarkdownBlock(f"Node {node.metadata.name} cordoned")])
+            except Exception as e:
+                logging.error(f"Failed to cordon node {node.metadata.name}: {e}")
+                raise ActionException(ErrorCodes.ACTION_UNEXPECTED_ERROR, f"Failed to cordon node {node.metadata.name} {e}")
 
     if cordoned_nodes:
         logging.info(f"Cordoned nodes: {', '.join(cordoned_nodes)}")
